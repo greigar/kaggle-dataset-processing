@@ -18,10 +18,10 @@ col_spec <- cols(
 )
 
 read_wq_csv <- function(wine_colour) {
-  filename       <- paste0(data_dir, "winequality-", wine_colour, ".csv")
-  wq_data        <- read_delim(filename, col_types=col_spec, delim=';')
-  wq_data$colour <- wine_colour
-  wq_data
+  filename      <- paste0(data_dir, "winequality-", wine_colour, ".csv")
+  w_data        <- read_delim(filename, col_types=col_spec, delim=';')
+  w_data$colour <- wine_colour
+  w_data
 }
 
 white_wine_data  <- read_wq_csv("white")
@@ -31,40 +31,47 @@ wine_data        <- rbind(red_wine_data, white_wine_data)
 names(wine_data) <- make.names(names(wine_data))
 wine_data$colour <- as.integer(wine_data$colour == "red")
 
-stop("LPOLPOPLP")
-
-#
-# QUALITY
-#
-inTrain      <- createDataPartition(y = wq_data$quality, p = 0.75, list = FALSE)
-tab_training <- wq_data[inTrain,]
-tab_testing  <- wq_data[-inTrain,]
-
-tab_model_rf  <- randomForest(quality ~ ., data = as.data.frame(tab_training)) # 0.664
-tab_model_crf <- train(quality ~ ., data = tab_training, method = "rf")        # 0.668
-tab_model_gbm <- train(quality ~ ., data = tab_training, method = "gbm")       # 0.576
-tab_model_xgb <- train(quality ~ ., data = tab_training, method = "xgbTree")   # 0.554
-
-predict_test <- function(model) {
-  plot(model)
-  tab_predict <- predict(model, newdata = tab_testing[,-12])
-  confusionMatrix(round(tab_predict), tab_testing$quality)
-}
-
-
-# COLOUR
-
-inTrain      <- createDataPartition(y = wine_data$colour, p = 0.75, list = FALSE)
-tab_training <- wine_data[inTrain,]
-tab_testing  <- wine_data[-inTrain,]
-
-tab_model_rf  <- randomForest(colour ~ ., data = as.data.frame(tab_training), importance=T)
-varImp(tab_model_rf)
-
-predict_test_colour <- function(model, reference_col_name, reference_col_num) {
+predict_test <- function(model, reference_col_name, reference_col_num) {
   plot(model)
   tab_predict <- predict(model, newdata = tab_testing[,-reference_col_num])
   confusionMatrix(round(tab_predict), eval(parse(text = reference_col_name)))
 }
 
+stop("here be dragons")
+
+#
+# QUALITY
+#
+inTrain      <- createDataPartition(y = wine_data$quality, p = 0.75, list = FALSE)
+tab_training <- wine_data[inTrain,]
+tab_testing  <- wine_data[-inTrain,]
+
+tab_model_rf   <- randomForest(quality ~ ., data = as.data.frame(tab_training), importance = TRUE) # 0.664
+
+varimp_results <- varImp(tab_model_rf)
+tibble( name = rownames(varimp_results), value = varimp_results$Overall ) %>% arrange(desc(value))
+
+predict_test_colour( tab_model_rf, "tab_testing$quality", 12)
+
+model_1 <- lm(quality ~ alcohol, wine_data)
+model_3 <- lm(quality ~ alcohol + volatile.acidity + free.sulfur.dioxide, wine_data)
+anova(model_1, model_3)
+ggplot(wine_data, aes(x = alcohol, y = quality)) + geom_point() + geom_smooth(method = lm, formula = y ~ splines::ns(x, 7) )
+
+#tab_model_crf <- train(quality ~ ., data = tab_training, method = "rf")        # 0.668
+#tab_model_gbm <- train(quality ~ ., data = tab_training, method = "gbm")       # 0.576
+#tab_model_xgb <- train(quality ~ ., data = tab_training, method = "xgbTree")   # 0.554
+
+
+#
+# COLOUR
+#
+
+inTrain      <- createDataPartition(y = wine_data$colour, p = 0.75, list = FALSE)
+tab_training <- wine_data[inTrain,]
+tab_testing  <- wine_data[-inTrain,]
+
+tab_model_rf  <- randomForest(colour ~ ., data = as.data.frame(tab_training), importance = TRUE)
+varImp(tab_model_rf)
 predict_test_colour(tab_model_rf, "tab_testing$colour", 13)
+
